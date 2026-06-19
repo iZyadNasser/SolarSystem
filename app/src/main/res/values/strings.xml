@@ -1,5 +1,56 @@
 <resources>
     <string name="app_name">SolarSystem</string>
+
+    <!-- Earth (start) state -->
+    <string name="earth">Earth</string>
+    <string name="a_long_blue_world_drifting_through_the_endless_dark">A long blue world drifting\nthrough the endless dark.</string>
+    <string name="swipe_up_to_explore">Swipe up to explore</string>
+
+    <!-- Solar System (end) state -->
+    <string name="our_solar_system">Our Solar System</string>
+    <string name="earth_is_only_one_small_part">Earth is only one small part\nof a much larger story</string>
+
+    <!-- Fact labels -->
+    <string name="you_would_weigh">You Would Weigh</string>
+    <string name="one_day">One Day</string>
+    <string name="temperature">Temperature</string>
+    <string name="additional_info">Additional Info</string>
+
+    <!-- Fact value formats -->
+    <string name="weight_value">%1$dkg → %2$dkg</string>
+    <string name="temperature_value">%1$d°C</string>
+    <string name="day_length_value">%1$s %2$s</string>
     <string name="hours">Hours</string>
     <string name="days">Days</string>
+    <plurals name="jacket_hint">
+        <item quantity="one">Bring a jacket</item>
+        <item quantity="other">Bring %d jackets</item>
+    </plurals>
+
+    <!-- Planet names -->
+    <string name="saturn">Saturn</string>
+    <string name="mars">Mars</string>
+    <string name="mercury">Mercury</string>
+    <string name="venus">Venus</string>
+    <string name="jupiter">Jupiter</string>
+    <string name="uranus">Uranus</string>
+    <string name="neptune">Neptune</string>
+
+    <!-- Planet nicknames -->
+    <string name="saturn_nickname">The Ring Master</string>
+    <string name="mars_nickname">The next colony</string>
+    <string name="mercury_nickname">The Fatest Planet</string>
+    <string name="venus_nickname">The Toxic Beauty</string>
+    <string name="jupiter_nickname">The Heavy Giant</string>
+    <string name="uranus_nickname">The Lazy Iceberg</string>
+    <string name="neptune_nickname">The Windy World</string>
+
+    <!-- Planet additional info -->
+    <string name="saturn_info">Lighter than water</string>
+    <string name="mars_info">Red Dust Storms</string>
+    <string name="mercury_info">Birthday every 88 days</string>
+    <string name="venus_info">Sun rises from West</string>
+    <string name="jupiter_info">Has 95 Moons</string>
+    <string name="uranus_info">diamond Shower</string>
+    <string name="neptune_info">Wind faster than Sound</string>
 </resources>
