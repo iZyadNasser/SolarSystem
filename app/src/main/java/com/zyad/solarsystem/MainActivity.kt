@@ -8,6 +8,11 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.IntRange
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -76,6 +81,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.CancellationException
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -111,7 +118,20 @@ private val CardStackOffset =
     14.dp           // how far each stacked card peeks below the previous one
 private const val CARD_IMAGE_FADED_ALPHA =
     0.32f // settled card's planet image fades to this as the next card scrolls in
+
 private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
+
+private const val CHEVRON_COUNT = 3
+private const val CHEVRON_CYCLE_MS = 1400
+private const val CHEVRON_MIN_ALPHA = 0.5f
+
+// Opacity for one chevron at a given cycle phase (0..1). Each chevron peaks a third of a cycle after
+// the one below it, so the highlight sweeps upward across the stack — the swipe-to-unlock shimmer.
+private fun chevronAlpha(phase: Float, index: Int): Float {
+    val offset = (CHEVRON_COUNT - 1 - index).toFloat() / CHEVRON_COUNT
+    val wave = (1f + cos(2.0 * PI * (phase - offset)).toFloat()) / 2f // 1 at peak, 0 at trough
+    return lerp(CHEVRON_MIN_ALPHA, 1f, wave)
+}
 
 @Composable
 private fun SolarSystemScreen() {
@@ -346,12 +366,21 @@ private fun SwipeHint(
     collapseDistance: Float,
     modifier: Modifier,
 ) {
+    val transition = rememberInfiniteTransition(label = "swipeHint")
+    val phase = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(CHEVRON_CYCLE_MS, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "chevronPhase",
+    )
     Column(
         modifier = modifier
             .navigationBarsPadding()
             .padding(bottom = 20.dp)
             .graphicsLayer {
-                // Drift down and fade out early in the collapse.
                 val collapse = (scrollState.value / collapseDistance).coerceIn(0f, 1f)
                 translationY =
                     EaseInOut.transform((collapse / 0.4f).coerceIn(0f, 1f)) * heightPx * 0.18f
@@ -361,21 +390,23 @@ private fun SwipeHint(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         ChevronUp(
-            modifier = Modifier
-                .graphicsLayer {
-                    translationY = 8.dp.toPx()
-                }
+            modifier = Modifier.graphicsLayer {
+                translationY = 8.dp.toPx()
+                alpha = chevronAlpha(phase.value, 0)
+            }
         )
         ChevronUp(
-            color = Color.White.copy(alpha = 0.78f),
-            modifier = Modifier
-                .graphicsLayer {
-                    translationY = 4.dp.toPx()
-                }
+            modifier = Modifier.graphicsLayer {
+                translationY = 4.dp.toPx()
+                alpha = chevronAlpha(phase.value, 1)
+            }
         )
         ChevronUp(
-            color = Color.White.copy(alpha = 0.5f),
-            modifier = Modifier.padding(bottom = 10.dp)
+            modifier = Modifier
+                .padding(bottom = 10.dp)
+                .graphicsLayer {
+                    alpha = chevronAlpha(phase.value, 2)
+                }
         )
         BasicText(
             text = stringResource(R.string.swipe_up_to_explore),
