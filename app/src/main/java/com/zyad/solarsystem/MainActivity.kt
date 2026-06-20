@@ -7,7 +7,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.annotation.DrawableRes
 import androidx.annotation.IntRange
 import androidx.annotation.StringRes
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
@@ -77,9 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.CancellationException
-import kotlin.math.PI
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,26 +111,7 @@ private val CardStackOffset =
     14.dp           // how far each stacked card peeks below the previous one
 private const val CARD_IMAGE_FADED_ALPHA =
     0.32f // settled card's planet image fades to this as the next card scrolls in
-private const val CARD_IMAGE_FADE_BOUNCE =
-    0.15f // amplitude of the settle bounce; raise to bounce harder, 0 disables it
-private const val CARD_IMAGE_FADE_BOUNCE_START =
-    0.6f // fraction of the fade where the image hits the target and starts bouncing
-
-private val CardImageFadeEase =
-    CubicBezierEasing(0f, 0f, 0.4f, 1f) // near-linear with a slight slow at the end
-
 private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
-
-private fun cardImageFadeEasing(fraction: Float): Float {
-    val t = fraction.coerceIn(0f, 1f)
-    if (t >= 1f) return 1f
-    return if (t < CARD_IMAGE_FADE_BOUNCE_START) {
-        CardImageFadeEase.transform(t / CARD_IMAGE_FADE_BOUNCE_START)
-    } else {
-        val tail = (t - CARD_IMAGE_FADE_BOUNCE_START) / (1f - CARD_IMAGE_FADE_BOUNCE_START)
-        1f + CARD_IMAGE_FADE_BOUNCE * sin(3f * PI.toFloat() * tail) * (1f - tail)
-    }
-}
 
 @Composable
 private fun SolarSystemScreen() {
@@ -330,8 +308,19 @@ private fun PlanetStack(
                         heightPx * CARD_FIRST_TOP + precedingPx + index * cardGapPx - scrollState.value
                     val stackTop = heightPx * CARD_STACK_TOP + index * stackOffsetPx
                     val span = (cardHeights[index] + cardGapPx - stackOffsetPx).coerceAtLeast(1f)
-                    val progress = (stackTop - naturalTop) / span
-                    lerp(1f, CARD_IMAGE_FADED_ALPHA, cardImageFadeEasing(progress))
+                    val progress = ((stackTop - naturalTop) / span).coerceIn(0f, 1f)
+                    lerp(1f, CARD_IMAGE_FADED_ALPHA, progress)
+                },
+                cardAlpha = {
+                    val precedingPx = (0 until index).sumOf { cardHeights[it] }
+                    val naturalTop =
+                        heightPx * CARD_FIRST_TOP + precedingPx + index * cardGapPx - scrollState.value
+                    val stackTop = heightPx * CARD_STACK_TOP + index * stackOffsetPx
+                    val span = (cardHeights[index] + cardGapPx - stackOffsetPx).coerceAtLeast(1f)
+                    // Driven by THIS card's rise toward its own settle (unlike imageAlpha, which tracks
+                    // the next card): 0 one step before this card settles, 1 once settled and after.
+                    val progress = ((stackTop - naturalTop) / span + 1f).coerceIn(0f, 1f)
+                    lerp(CARD_IMAGE_FADED_ALPHA, 1f, progress)
                 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -429,6 +418,7 @@ fun PlanetCard(
     planet: Planet,
     modifier: Modifier = Modifier,
     imageAlpha: () -> Float = { 1f },
+    cardAlpha: () -> Float = { 1f },
 ) {
     Box(
         modifier = modifier.fillMaxWidth(),
@@ -441,7 +431,11 @@ fun PlanetCard(
                     color = Color(0xFF2F2E2E),
                     shape = CardShape
                 )
-                .background(Color(0xFF0B1223).copy(alpha = 0.8f), CardShape)
+                .drawBehind {
+                    drawRect(
+                        Color(0xFF0B1223).copy(alpha = cardAlpha())
+                    )
+                }
         )
         Column(
             modifier = Modifier
