@@ -441,7 +441,10 @@ fun PlanetCard(
             modifier = Modifier
                 .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 10.dp),
         ) {
-            PlanetHeader(planet, imageAlpha = imageAlpha)
+            PlanetHeader(
+                planet = planet,
+                imageAlpha = imageAlpha
+            )
             PlanetFacts(
                 planet = planet,
                 modifier = Modifier.graphicsLayer {
@@ -467,6 +470,16 @@ private fun PlanetHeader(
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .padding(end = 8.dp)
+                .dropShadow(
+                    shape = CardShape,
+                    shadow = Shadow(
+                        radius = 100.dp,
+                        offset = DpOffset(x = 0.dp, y = (-16).dp),
+                        spread = 0.dp,
+                        color = planet.color,
+                        alpha = 0.3f,
+                    )
+                )
                 .size(112.dp)
                 .graphicsLayer {
                     translationY = (-30).dp.toPx()
@@ -761,6 +774,7 @@ data class Planet(
     @param:StringRes val name: Int,
     @param:StringRes val nickName: Int,
     @param:DrawableRes val thumbnail: Int,
+    val color: Color,
     @param:IntRange(from = 0) val person70KgRelativeWeightKg: Int,
     val dayLength: Double,
     @param:StringRes val dayLengthUnit: Int = R.string.hours,
@@ -774,6 +788,7 @@ val planets = listOf(
         name = R.string.saturn,
         nickName = R.string.saturn_nickname,
         thumbnail = R.drawable.im_saturn,
+        color = Color(0xFFAB4F20),
         person70KgRelativeWeightKg = 74,
         dayLength = 10.7,
         temperatureCelsius = -178,
@@ -784,6 +799,7 @@ val planets = listOf(
         name = R.string.mars,
         nickName = R.string.mars_nickname,
         thumbnail = R.drawable.im_mars,
+        color = Color(0xFFFF844E),
         person70KgRelativeWeightKg = 27,
         dayLength = 24.6,
         temperatureCelsius = -65,
@@ -794,6 +810,7 @@ val planets = listOf(
         name = R.string.mercury,
         nickName = R.string.mercury_nickname,
         thumbnail = R.drawable.im_mercury,
+        color = Color(0xFF095B91),
         person70KgRelativeWeightKg = 26,
         dayLength = 1408.0,
         temperatureCelsius = -167,
@@ -804,6 +821,7 @@ val planets = listOf(
         name = R.string.venus,
         nickName = R.string.venus_nickname,
         thumbnail = R.drawable.im_venus,
+        color = Color(0xFFC69E4A),
         person70KgRelativeWeightKg = 63,
         dayLength = 243.0,
         dayLengthUnit = R.string.days,
@@ -815,6 +833,7 @@ val planets = listOf(
         name = R.string.jupiter,
         nickName = R.string.jupiter_nickname,
         thumbnail = R.drawable.im_jupiter,
+        color = Color(0xFFFF8332),
         person70KgRelativeWeightKg = 177,
         dayLength = 9.9,
         temperatureCelsius = -110,
@@ -825,6 +844,7 @@ val planets = listOf(
         name = R.string.uranus,
         nickName = R.string.uranus_nickname,
         thumbnail = R.drawable.im_uranus,
+        color = Color(0xFF31CFDB),
         person70KgRelativeWeightKg = 62,
         dayLength = 17.0,
         temperatureCelsius = -224,
@@ -835,6 +855,7 @@ val planets = listOf(
         name = R.string.neptune,
         nickName = R.string.neptune_nickname,
         thumbnail = R.drawable.im_neptune,
+        color = Color(0xFF2CA6DB),
         person70KgRelativeWeightKg = 79,
         dayLength = 16.0,
         temperatureCelsius = -214,
