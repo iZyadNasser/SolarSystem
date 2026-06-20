@@ -7,10 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.annotation.DrawableRes
 import androidx.annotation.IntRange
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -40,6 +42,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
@@ -81,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.drop
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -131,6 +135,33 @@ private fun chevronAlpha(phase: Float, index: Int): Float {
     val offset = (CHEVRON_COUNT - 1 - index).toFloat() / CHEVRON_COUNT
     val wave = (1f + cos(2.0 * PI * (phase - offset)).toFloat()) / 2f // 1 at peak, 0 at trough
     return lerp(CHEVRON_MIN_ALPHA, 1f, wave)
+}
+
+private const val GLOBE_SETTLE_BOUNCE = 0.05f // globe scale overshoot at settle
+private val TitleSettleBounce = 8.dp          // title vertical bounce at settle
+private val SwipeSettleBounce = 10.dp         // swipe-hint vertical bounce at settle
+
+// Normalized spring-like settle bounce: overshoots the target then rings down to rest. Scale by a magnitude.
+private val SettleBounceSpec = keyframes {
+    durationMillis = 700
+    0f at 0
+    1f at 240
+    (-0.35f) at 415
+    0.12f at 546
+    0f at 700
+}
+
+// Fires the bounce once whenever [atSettle] flips to true, watched in a coroutine so nothing recomposes.
+// Read the returned value inside a graphicsLayer; only that layer redraws during the ~320ms bounce.
+@Composable
+private fun rememberSettleBounce(vararg keys: Any?, atSettle: () -> Boolean): State<Float> {
+    val bounce = remember { Animatable(0f) }
+    LaunchedEffect(*keys) {
+        snapshotFlow(atSettle)
+            .drop(1) // skip the initial state; bounce only when a settle is newly reached by scrolling
+            .collect { settled -> if (settled) bounce.animateTo(0f, SettleBounceSpec) }
+    }
+    return bounce.asState()
 }
 
 @Composable
@@ -220,6 +251,9 @@ private fun SolarBackground(scrollState: ScrollState, collapseDistance: Float) {
 
 @Composable
 private fun SolarGlobe(scrollState: ScrollState, heightPx: Float, collapseDistance: Float) {
+    val bounce = rememberSettleBounce(scrollState, collapseDistance) {
+        scrollState.value >= collapseDistance
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(R.drawable.im_earth),
@@ -239,7 +273,8 @@ private fun SolarGlobe(scrollState: ScrollState, heightPx: Float, collapseDistan
 
                     val centerY =
                         lerp(GLOBE_INTRO_CENTER_Y, GLOBE_HERO_CENTER_Y, collapse) * heightPx
-                    translationY = (centerY - heightPx / 2f)
+                    translationY =
+                        (centerY - heightPx / 2f) * (1f + bounce.value * GLOBE_SETTLE_BOUNCE)
                     alpha = lerp(1f, GLOBE_HERO_OPACITY, collapse)
                 },
         )
@@ -249,6 +284,9 @@ private fun SolarGlobe(scrollState: ScrollState, heightPx: Float, collapseDistan
 @Composable
 private fun SolarHeaderSlot(scrollState: ScrollState, collapseDistance: Float, modifier: Modifier) {
     val slotPx = with(LocalDensity.current) { HeaderSlotHeight.toPx() }
+    val bounce = rememberSettleBounce(scrollState, collapseDistance) {
+        scrollState.value >= collapseDistance
+    }
 
     fun swap(scroll: Int): Float {
         val collapse = (scroll / collapseDistance).coerceIn(0f, 1f)
@@ -268,7 +306,7 @@ private fun SolarHeaderSlot(scrollState: ScrollState, collapseDistance: Float, m
             topPadding = 56.dp,
             modifier = Modifier.graphicsLayer {
                 val swap = swap(scrollState.value)
-                translationY = -swap * slotPx
+                translationY = -swap * slotPx + bounce.value * TitleSettleBounce.toPx()
                 alpha = 1f - swap
             },
         )
@@ -280,7 +318,7 @@ private fun SolarHeaderSlot(scrollState: ScrollState, collapseDistance: Float, m
             topPadding = 98.dp,
             modifier = Modifier.graphicsLayer {
                 val swap = swap(scrollState.value)
-                translationY = (swap - 1f) * slotPx
+                translationY = (swap - 1f) * slotPx + bounce.value * TitleSettleBounce.toPx()
                 alpha = swap
             },
         )
@@ -376,6 +414,7 @@ private fun SwipeHint(
         ),
         label = "chevronPhase",
     )
+    val bounce = rememberSettleBounce(scrollState) { scrollState.value == 0 }
     Column(
         modifier = modifier
             .navigationBarsPadding()
@@ -383,7 +422,8 @@ private fun SwipeHint(
             .graphicsLayer {
                 val collapse = (scrollState.value / collapseDistance).coerceIn(0f, 1f)
                 translationY =
-                    EaseInOut.transform((collapse / 0.4f).coerceIn(0f, 1f)) * heightPx * 0.18f
+                    EaseInOut.transform((collapse / 0.4f).coerceIn(0f, 1f)) * heightPx * 0.18f +
+                            bounce.value * SwipeSettleBounce.toPx()
                 alpha = 1f - (collapse / 0.3f).coerceIn(0f, 1f)
             },
         horizontalAlignment = Alignment.CenterHorizontally,
