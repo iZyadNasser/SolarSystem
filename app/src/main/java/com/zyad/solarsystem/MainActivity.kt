@@ -50,6 +50,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
@@ -101,69 +102,6 @@ class MainActivity : ComponentActivity() {
 
 // region Solar System screen
 
-private val HeaderSlotHeight = 300.dp
-private val EaseInOut = LinearEasing
-
-private const val COLLAPSE_FRACTION = 0.85f
-
-private const val GLOBE_ART_FILL = 0.79f
-private const val GLOBE_INTRO_DIAMETER = 1.53f
-private const val GLOBE_INTRO_CENTER_Y = 0.8f
-private const val GLOBE_HERO_DIAMETER = 0.6f
-private const val GLOBE_HERO_CENTER_Y = 0.2f
-private const val GLOBE_HERO_OPACITY = 0.5f
-
-private const val CARD_FIRST_TOP = 1.25f      // first card starts this far down (off the bottom)
-private val CARD_STEP =
-    32.dp                 // constant vertical gap between consecutive cards while scrolling
-private const val CARD_ACTIVE_TOP = 0.4f     // where the focused card settles
-private const val CARD_STACK_TOP = 0.4f      // where cards pile up at the top
-private val CardStackOffset =
-    14.dp           // how far each stacked card peeks below the previous one
-private const val CARD_IMAGE_FADED_ALPHA =
-    0.32f // settled card's planet image fades to this as the next card scrolls in
-
-private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
-
-private const val CHEVRON_COUNT = 3
-private const val CHEVRON_CYCLE_MS = 1400
-private const val CHEVRON_MIN_ALPHA = 0.5f
-
-// Opacity for one chevron at a given cycle phase (0..1). Each chevron peaks a third of a cycle after
-// the one below it, so the highlight sweeps upward across the stack — the swipe-to-unlock shimmer.
-private fun chevronAlpha(phase: Float, index: Int): Float {
-    val offset = (CHEVRON_COUNT - 1 - index).toFloat() / CHEVRON_COUNT
-    val wave = (1f + cos(2.0 * PI * (phase - offset)).toFloat()) / 2f // 1 at peak, 0 at trough
-    return lerp(CHEVRON_MIN_ALPHA, 1f, wave)
-}
-
-private const val GLOBE_SETTLE_BOUNCE = 0.05f // globe scale overshoot at settle
-private val TitleSettleBounce = 8.dp          // title vertical bounce at settle
-private val SwipeSettleBounce = 10.dp         // swipe-hint vertical bounce at settle
-
-// Normalized spring-like settle bounce: overshoots the target then rings down to rest. Scale by a magnitude.
-private val SettleBounceSpec = keyframes {
-    durationMillis = 700
-    0f at 0
-    1f at 240
-    (-0.35f) at 415
-    0.12f at 546
-    0f at 700
-}
-
-// Fires the bounce once whenever [atSettle] flips to true, watched in a coroutine so nothing recomposes.
-// Read the returned value inside a graphicsLayer; only that layer redraws during the ~320ms bounce.
-@Composable
-private fun rememberSettleBounce(vararg keys: Any?, atSettle: () -> Boolean): State<Float> {
-    val bounce = remember { Animatable(0f) }
-    LaunchedEffect(*keys) {
-        snapshotFlow(atSettle)
-            .drop(1) // skip the initial state; bounce only when a settle is newly reached by scrolling
-            .collect { settled -> if (settled) bounce.animateTo(0f, SettleBounceSpec) }
-    }
-    return bounce.asState()
-}
-
 @Composable
 private fun SolarSystemScreen() {
     val scrollState = rememberScrollState()
@@ -188,7 +126,10 @@ private fun SolarSystemScreen() {
                 val scroll = scrollState.value
                 if (scrolling.not() && scroll in 1 until collapse) {
                     try {
-                        scrollState.animateScrollTo(if (scroll * 2 > collapse) collapse else 0)
+                        scrollState.animateScrollTo(
+                            if (scroll * 2 > collapse) collapse else 0,
+                            animationSpec = tween(easing = LinearEasing)
+                        )
                     } catch (_: CancellationException) {
                     }
                 }
@@ -375,8 +316,6 @@ private fun PlanetStack(
                         heightPx * CARD_FIRST_TOP + precedingPx + index * cardGapPx - scrollState.value
                     val stackTop = heightPx * CARD_STACK_TOP + index * stackOffsetPx
                     val span = (cardHeights[index] + cardGapPx - stackOffsetPx).coerceAtLeast(1f)
-                    // Driven by THIS card's rise toward its own settle (unlike imageAlpha, which tracks
-                    // the next card): 0 one step before this card settles, 1 once settled and after.
                     val progress = ((stackTop - naturalTop) / span + 1f).coerceIn(0f, 1f)
                     lerp(CARD_IMAGE_FADED_ALPHA, 1f, progress)
                 },
@@ -415,6 +354,7 @@ private fun SwipeHint(
         label = "chevronPhase",
     )
     val bounce = rememberSettleBounce(scrollState) { scrollState.value == 0 }
+
     Column(
         modifier = modifier
             .navigationBarsPadding()
@@ -429,41 +369,50 @@ private fun SwipeHint(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ChevronUp(
-            modifier = Modifier.graphicsLayer {
-                translationY = 8.dp.toPx()
-                alpha = chevronAlpha(phase.value, 0)
-            }
-        )
-        ChevronUp(
-            modifier = Modifier.graphicsLayer {
-                translationY = 4.dp.toPx()
-                alpha = chevronAlpha(phase.value, 1)
-            }
-        )
-        ChevronUp(
-            modifier = Modifier
-                .padding(bottom = 10.dp)
-                .graphicsLayer {
-                    alpha = chevronAlpha(phase.value, 2)
-                }
-        )
-        BasicText(
-            text = stringResource(R.string.swipe_up_to_explore),
-            style = SwipeStyle,
-            modifier = Modifier
-                .dropShadow(
-                    shape = RectangleShape,
-                    shadow = Shadow(
-                        radius = 16.dp,
-                        offset = DpOffset(x = 0.dp, y = 4.dp),
-                        spread = 0.dp,
-                        color = Color.White,
-                        alpha = 0.44f
-                    )
-                )
-        )
+        AnimatedChevrons(phase)
+        SwipeLabel()
     }
+}
+
+@Composable
+private fun AnimatedChevrons(phase: State<Float>) {
+    ChevronUp(
+        modifier = Modifier.graphicsLayer {
+            translationY = 8.dp.toPx()
+            alpha = chevronAlpha(phase.value, 0)
+        }
+    )
+    ChevronUp(
+        modifier = Modifier.graphicsLayer {
+            translationY = 4.dp.toPx()
+            alpha = chevronAlpha(phase.value, 1)
+        }
+    )
+    ChevronUp(
+        modifier = Modifier
+            .padding(bottom = 10.dp)
+            .graphicsLayer {
+                alpha = chevronAlpha(phase.value, 2)
+            }
+    )
+}
+
+@Composable
+private fun SwipeLabel() {
+    BasicText(
+        text = stringResource(R.string.swipe_up_to_explore),
+        style = SwipeStyle,
+        modifier = Modifier.dropShadow(
+            shape = RectangleShape,
+            shadow = Shadow(
+                radius = 16.dp,
+                offset = DpOffset(x = 0.dp, y = 4.dp),
+                spread = 0.dp,
+                color = Color.White,
+                alpha = 0.44f,
+            )
+        )
+    )
 }
 
 @Composable
@@ -496,6 +445,7 @@ fun PlanetCard(
     ) {
         Box(
             modifier = Modifier
+                .clip(CardShape)
                 .matchParentSize()
                 .border(
                     width = 0.5.dp,
@@ -557,38 +507,44 @@ private fun PlanetHeader(
                     alpha = imageAlpha()
                 }
         )
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            BasicText(
-                text = stringResource(planet.name),
-                style = NameStyle,
-                modifier = Modifier
-                    .dropShadow(
-                        shape = RectangleShape,
-                        shadow = Shadow(
-                            radius = 12.dp,
-                            offset = DpOffset(x = (-4).dp, y = 4.dp),
-                            spread = 0.dp,
-                            color = Color.White,
-                            alpha = 0.08f
-                        )
+
+        PlanetTitles(planet)
+    }
+}
+
+@Composable
+private fun PlanetTitles(planet: Planet) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BasicText(
+            text = stringResource(planet.name),
+            style = NameStyle,
+            modifier = Modifier
+                .dropShadow(
+                    shape = RectangleShape,
+                    shadow = Shadow(
+                        radius = 12.dp,
+                        offset = DpOffset(x = (-4).dp, y = 4.dp),
+                        spread = 0.dp,
+                        color = Color.White,
+                        alpha = 0.08f
                     )
-            )
-            BasicText(
-                text = stringResource(planet.nickName),
-                style = NicknameStyle,
-                modifier = Modifier
-                    .dropShadow(
-                        shape = RectangleShape,
-                        shadow = Shadow(
-                            radius = 12.dp,
-                            offset = DpOffset(x = (-4).dp, y = 4.dp),
-                            spread = 0.dp,
-                            color = Color.White,
-                            alpha = 0.04f
-                        )
+                )
+        )
+        BasicText(
+            text = stringResource(planet.nickName),
+            style = NicknameStyle,
+            modifier = Modifier
+                .dropShadow(
+                    shape = RectangleShape,
+                    shadow = Shadow(
+                        radius = 12.dp,
+                        offset = DpOffset(x = (-4).dp, y = 4.dp),
+                        spread = 0.dp,
+                        color = Color.White,
+                        alpha = 0.04f
                     )
-            )
-        }
+                )
+        )
     }
 }
 
@@ -618,23 +574,22 @@ private fun FactsRow(
     Row(
         modifier = modifier.height(IntrinsicSize.Min),
     ) {
-        Cell(
+        Row(
             Modifier
                 .weight(1f)
-                .padding(end = 16.dp), start
-        )
+                .padding(end = 16.dp),
+        ) {
+            start()
+        }
         FactColumnDivider()
-        Cell(
+        Row(
             Modifier
                 .weight(1f)
-                .padding(start = 16.dp), end
-        )
+                .padding(start = 16.dp),
+        ) {
+            end()
+        }
     }
-}
-
-@Composable
-private fun Cell(modifier: Modifier, content: @Composable () -> Unit) {
-    Row(modifier) { content() }
 }
 
 @Composable
@@ -713,7 +668,7 @@ private fun Fact(icon: ImageVector, label: String, value: AnnotatedString) {
 
 // endregion
 
-// region Formatting
+// region Formatting utils
 
 private const val BASE_WEIGHT_KG = 70
 
@@ -753,7 +708,7 @@ val LilyScriptOne = FontFamily(
 
 // endregion
 
-// region Theme
+// region Styles & Colors
 
 private val SpaceBackground = Color(0xFF0D0608)
 private val SpaceBackgroundGradient = Brush.verticalGradient(
@@ -930,6 +885,64 @@ val planets = listOf(
         additionalInfo = R.string.neptune_info
     ),
 )
+
+// endregion
+
+// region Specs & Consts
+private val HeaderSlotHeight = 300.dp
+private val EaseInOut = LinearEasing
+
+private const val COLLAPSE_FRACTION = 0.85f
+
+private const val GLOBE_ART_FILL = 0.79f
+private const val GLOBE_INTRO_DIAMETER = 1.53f
+private const val GLOBE_INTRO_CENTER_Y = 0.8f
+private const val GLOBE_HERO_DIAMETER = 0.6f
+private const val GLOBE_HERO_CENTER_Y = 0.2f
+private const val GLOBE_HERO_OPACITY = 0.5f
+
+private const val CARD_FIRST_TOP = 1.25f
+private val CARD_STEP = 32.dp
+private const val CARD_ACTIVE_TOP = 0.4f
+private const val CARD_STACK_TOP = 0.4f
+private val CardStackOffset = 14.dp
+private const val CARD_IMAGE_FADED_ALPHA = 0.32f
+
+private fun lerp(start: Float, stop: Float, fraction: Float) = start + (stop - start) * fraction
+
+private const val CHEVRON_COUNT = 3
+private const val CHEVRON_CYCLE_MS = 1400
+private const val CHEVRON_MIN_ALPHA = 0.5f
+
+private fun chevronAlpha(phase: Float, index: Int): Float {
+    val offset = (CHEVRON_COUNT - 1 - index).toFloat() / CHEVRON_COUNT
+    val wave = (1f + cos(2.0 * PI * (phase - offset)).toFloat()) / 2f
+    return lerp(CHEVRON_MIN_ALPHA, 1f, wave)
+}
+
+private const val GLOBE_SETTLE_BOUNCE = 0.05f
+private val TitleSettleBounce = 8.dp
+private val SwipeSettleBounce = 10.dp
+
+private val SettleBounceSpec = keyframes {
+    durationMillis = 700
+    0f at 0
+    1f at 240
+    (-0.35f) at 415
+    0.12f at 546
+    0f at 700
+}
+
+@Composable
+private fun rememberSettleBounce(vararg keys: Any?, atSettle: () -> Boolean): State<Float> {
+    val bounce = remember { Animatable(0f) }
+    LaunchedEffect(*keys) {
+        snapshotFlow(atSettle)
+            .drop(1)
+            .collect { settled -> if (settled) bounce.animateTo(0f, SettleBounceSpec) }
+    }
+    return bounce.asState()
+}
 
 // endregion
 
