@@ -742,13 +742,9 @@ private fun Planet.temperatureValue(): AnnotatedString {
 // region Fonts
 
 val Rubik = FontFamily(
-    Font(R.font.rubik_light, FontWeight.Light),
     Font(R.font.rubik_regular, FontWeight.Normal),
     Font(R.font.rubik_medium, FontWeight.Medium),
-    Font(R.font.rubik_semi_bold, FontWeight.SemiBold),
     Font(R.font.rubik_bold, FontWeight.Bold),
-    Font(R.font.rubik_extra_bold, FontWeight.ExtraBold),
-    Font(R.font.rubik_black, FontWeight.Black)
 )
 
 val LilyScriptOne = FontFamily(
